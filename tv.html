@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TYPE HERE</title>
+<script src="/pusher.min.js"></script>
+<script src="/qrcode.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 100%; height: 100%; background: #060606; overflow: hidden; font-family: 'IBM Plex Mono', monospace; }
+
+  .stage {
+    width: 100vw; height: 100vh;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    padding: 20px;
+    gap: 12px;
+  }
+
+  /* LEFT: VIDEO */
+  .video-panel {
+    position: relative; background: #0a0a0a; border: 1px solid #181818;
+    overflow: hidden; display: flex; align-items: center; justify-content: center; cursor: pointer;
+  }
+  .upload-zone { display: flex; flex-direction: column; align-items: center; gap: 14px; color: #222; transition: color 0.3s; user-select: none; }
+  .video-panel:hover .upload-zone { color: #444; }
+  .upload-cross { width: 48px; height: 48px; position: relative; }
+  .upload-cross::before, .upload-cross::after { content: ''; position: absolute; background: currentColor; top: 50%; left: 50%; transform: translate(-50%, -50%); }
+  .upload-cross::before { width: 1px; height: 100%; }
+  .upload-cross::after { width: 100%; height: 1px; }
+  .upload-label { font-size: 9px; letter-spacing: 0.22em; text-transform: uppercase; }
+  #video-el { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: none; }
+  #file-input { display: none; }
+  .panel-tag { position: absolute; top: 12px; left: 12px; font-size: 8px; letter-spacing: 0.2em; color: #1e1e1e; text-transform: uppercase; z-index: 5; }
+
+  /* RIGHT: TERMINAL */
+  .doc-panel { background: #0a0a0a; border: 1px solid #181818; display: flex; flex-direction: column; overflow: hidden; }
+
+  .term-bar {
+    flex-shrink: 0; display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 16px; border-bottom: 1px solid #141414; background: #0d0d0d;
+  }
+  .term-dots { display: flex; gap: 6px; }
+  .term-dot { width: 10px; height: 10px; border-radius: 50%; background: #1e1e1e; }
+  .term-title { font-size: 9px; letter-spacing: 0.18em; color: #2a2a2a; text-transform: uppercase; }
+  .term-right { display: flex; align-items: center; gap: 12px; }
+  .conn-badge { font-size: 8px; letter-spacing: 0.12em; color: #222; text-transform: uppercase; padding: 3px 8px; border: 1px solid #181818; }
+  .conn-badge.connected { color: #3a3a3a; border-color: #252525; }
+  .qr-wrap { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+  .qr-box { width: 64px; height: 64px; background: #ececec; padding: 4px; display: flex; align-items: center; justify-content: center; }
+  #qr-div { width: 56px; height: 56px; }
+  #qr-div img { width: 56px !important; height: 56px !important; }
+  .qr-label { font-size: 7px; letter-spacing: 0.14em; color: #222; text-transform: uppercase; }
+
+  /* MESSAGES */
+  .messages {
+    flex: 1; overflow-y: auto; padding: 16px 20px;
+    scrollbar-width: thin; scrollbar-color: #1a1a1a transparent;
+    display: flex; flex-direction: column; gap: 16px;
+  }
+  .messages::-webkit-scrollbar { width: 3px; }
+  .messages::-webkit-scrollbar-thumb { background: #1e1e1e; }
+
+  .msg-block { display: flex; flex-direction: column; gap: 4px; }
+
+  .msg-meta {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 9px; letter-spacing: 0.1em;
+  }
+  .msg-meta .user { color: #404040; }
+  .msg-meta .sep  { color: #1e1e1e; }
+  .msg-meta .device { color: #2a2a2a; }
+  .msg-meta .time { color: #222; }
+  .msg-meta .ai-label { color: #5a1a1a; letter-spacing: 0.14em; font-size: 8px; }
+
+  /* USER message — green */
+  .msg-text {
+    font-size: clamp(12px, 1.5vw, 19px);
+    line-height: 1.6; word-break: break-word; white-space: pre-wrap;
+    padding-left: 14px; border-left: 1px solid #1f7f4a;
+    color: #43d27c;
+  }
+
+  /* AI reply — red */
+  .msg-text.ai {
+    color: #e05555;
+    border-left-color: #7f1f1f;
+  }
+
+  /* thinking indicator */
+  .thinking {
+    display: flex; align-items: center; gap: 6px;
+    padding-left: 14px; border-left: 1px solid #7f1f1f;
+  }
+  .think-dot {
+    width: 5px; height: 5px; border-radius: 50%; background: #5a1a1a;
+    animation: tpulse 1.2s ease-in-out infinite;
+  }
+  .think-dot:nth-child(2) { animation-delay: 0.2s; }
+  .think-dot:nth-child(3) { animation-delay: 0.4s; }
+  @keyframes tpulse { 0%,100%{opacity:0.2} 50%{opacity:1} }
+
+  .cursor {
+    display: inline-block; width: 0.5em; height: 1em;
+    background: #e05555; vertical-align: text-bottom;
+    animation: blink 1s step-end infinite; margin-left: 2px;
+  }
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
+
+  .empty-state {
+    flex: 1; display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 8px;
+  }
+  .empty-prompt { font-size: 11px; color: #1e1e1e; letter-spacing: 0.1em; }
+  .cursor-alone { display: inline-block; width: 8px; height: 16px; background: #1e1e1e; animation: blink 1s step-end infinite; vertical-align: middle; margin-left: 4px; }
+
+  .term-footer {
+    flex-shrink: 0; padding: 8px 16px; border-top: 1px solid #141414;
+    display: flex; align-items: center; justify-content: space-between; background: #0d0d0d;
+  }
+  .footer-stat { font-size: 8px; letter-spacing: 0.14em; color: #1e1e1e; }
+  .footer-stat span { color: #2e2e2e; }
+  .footer-legend { display: flex; gap: 12px; }
+  .legend-item { display: flex; align-items: center; gap: 5px; font-size: 8px; letter-spacing: 0.1em; }
+  .legend-dot { width: 6px; height: 6px; border-radius: 50%; }
+  .legend-dot.green { background: #43d27c; }
+  .legend-dot.red   { background: #e05555; }
+  .legend-label { color: #252525; }
+</style>
+</head>
+<body>
+<div class="stage">
+  <!-- LEFT: VIDEO -->
+  <div class="video-panel" onclick="document.getElementById('file-input').click()">
+    <span class="panel-tag">— video</span>
+    <input type="file" id="file-input" accept="video/*">
+    <div class="upload-zone" id="upload-zone">
+      <div class="upload-cross"></div>
+      <span class="upload-label">click to upload</span>
+    </div>
+    <video id="video-el" autoplay loop muted playsinline></video>
+  </div>
+
+  <!-- RIGHT: TERMINAL -->
+  <div class="doc-panel">
+    <div class="term-bar">
+      <div class="term-dots">
+        <div class="term-dot"></div>
+        <div class="term-dot"></div>
+        <div class="term-dot"></div>
+      </div>
+      <span class="term-title">type here — live feed</span>
+      <div class="term-right">
+        <span class="conn-badge" id="conn-badge">connecting...</span>
+        <div class="qr-wrap">
+          <div class="qr-box"><div id="qr-div"></div></div>
+          <div class="qr-label">scan to join</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="messages" id="messages">
+      <div class="empty-state" id="empty-state">
+        <span class="empty-prompt">awaiting input<span class="cursor-alone"></span></span>
+      </div>
+    </div>
+
+    <div class="term-footer">
+      <div class="footer-legend">
+        <div class="legend-item"><div class="legend-dot green"></div><span class="legend-label">user</span></div>
+        <div class="legend-item"><div class="legend-dot red"></div><span class="legend-label">ai</span></div>
+      </div>
+      <span class="footer-stat">msgs <span id="msg-count">0</span></span>
+    </div>
+  </div>
+</div>
+
+<script>
+  document.getElementById('file-input').addEventListener('change', e => {
+    const file = e.target.files[0];
+    if (!file) return;
+    document.getElementById('video-el').src = URL.createObjectURL(file);
+    document.getElementById('video-el').style.display = 'block';
+    document.getElementById('upload-zone').style.display = 'none';
+  });
+
+  new QRCode(document.getElementById('qr-div'), {
+    text: 'https://greenroom-issue-5-8rz6.vercel.app/mobile.html',
+    width: 56, height: 56,
+    colorDark: '#0a0a0a', colorLight: '#ececec',
+    correctLevel: QRCode.CorrectLevel.M
+  });
+
+  const pusher   = new Pusher('8e1cefae4252719fab23', { cluster: 'us2', forceTLS: true });
+  const channel  = pusher.subscribe('livedoc');
+  const connBadge  = document.getElementById('conn-badge');
+  const messages   = document.getElementById('messages');
+  const msgCount   = document.getElementById('msg-count');
+  const emptyState = document.getElementById('empty-state');
+
+  pusher.connection.bind('connected', () => { connBadge.textContent = 'connected'; connBadge.classList.add('connected'); });
+  pusher.connection.bind('disconnected', () => { connBadge.textContent = 'disconnected'; connBadge.classList.remove('connected'); });
+
+  let allMessages = [];
+  let chatHistory = [];
+  let timers = {};
+
+  const fontMap = {
+    'mono':      "'IBM Plex Mono', monospace",
+    'serif':     "'Times New Roman', Times, serif",
+    'helvetica': "Helvetica, Arial, sans-serif",
+    'courier':   "'Courier New', Courier, monospace",
+    'georgia':   "Georgia, serif",
+    'garamond':  "Garamond, 'Times New Roman', serif"
+  };
+
+  channel.bind('message', async data => {
+    addUserMessage(data);
+    await getAIReply(data);
+  });
+
+  channel.bind('clear', () => {
+    allMessages = []; chatHistory = [];
+    Object.values(timers).forEach(clearInterval);
+    timers = {};
+    messages.innerHTML = '';
+    messages.appendChild(emptyState);
+    emptyState.style.display = 'flex';
+    msgCount.textContent = '0';
+  });
+
+  channel.bind('requestSync', () => {
+    if (allMessages.length > 0) {
+      fetch('/api/pusher', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ event: 'syncAll', data: { messages: allMessages } })
+      });
+    }
+  });
+
+  channel.bind('syncAll', data => {
+    if (!data.messages || allMessages.length > 0) return;
+    data.messages.forEach(m => {
+      if (m.role === 'ai') addAIMessage(m.text, m);
+      else addUserMessage(m, true);
+    });
+  });
+
+  function addUserMessage(data, isSynced) {
+    if (!isSynced) {
+      allMessages.push(data);
+      chatHistory.push({ role: 'user', content: data.text });
+    }
+    emptyState.style.display = 'none';
+
+    const block = document.createElement('div');
+    block.className = 'msg-block';
+    block.dataset.id = data.id;
+
+    const elapsed = isSynced ? Math.floor((Date.now() - data.ts) / 1000) : 0;
+    const meta = document.createElement('div');
+    meta.className = 'msg-meta';
+    meta.innerHTML = `<span class="user">${escHtml(data.user)}</span><span class="sep">/</span><span class="device">${escHtml(data.device)}</span><span class="sep">/</span><span class="time" data-ts="${data.ts}">${formatTime(elapsed)}</span>`;
+
+    const textEl = document.createElement('div');
+    textEl.className = 'msg-text';
+    textEl.style.fontFamily = fontMap[data.font] || fontMap['mono'];
+    textEl.textContent = data.text;
+
+    block.appendChild(meta);
+    block.appendChild(textEl);
+    messages.appendChild(block);
+    messages.scrollTop = messages.scrollHeight;
+
+    timers[data.id] = setInterval(() => {
+      const timeEl = block.querySelector('[data-ts]');
+      if (timeEl) timeEl.textContent = formatTime(Math.floor((Date.now() - data.ts) / 1000));
+    }, 10000);
+
+    updateCount();
+  }
+
+  async function getAIReply(userMsg) {
+    const thinkBlock = document.createElement('div');
+    thinkBlock.className = 'msg-block';
+    const thinkMeta = document.createElement('div');
+    thinkMeta.className = 'msg-meta';
+    thinkMeta.innerHTML = `<span class="ai-label">gpt-4o-mini</span>`;
+    const thinkEl = document.createElement('div');
+    thinkEl.className = 'thinking';
+    thinkEl.innerHTML = `<div class="think-dot"></div><div class="think-dot"></div><div class="think-dot"></div>`;
+    thinkBlock.appendChild(thinkMeta);
+    thinkBlock.appendChild(thinkEl);
+    messages.appendChild(thinkBlock);
+    messages.scrollTop = messages.scrollHeight;
+
+    try {
+      const res = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messages: chatHistory })
+      });
+      const data = await res.json();
+      const reply = data.reply || '...';
+      const sources = data.sources || [];
+
+      chatHistory.push({ role: 'assistant', content: reply });
+      thinkBlock.removeChild(thinkEl);
+
+      const replyEl = document.createElement('div');
+      replyEl.className = 'msg-text ai';
+      replyEl.style.fontFamily = fontMap[userMsg.font] || fontMap['mono'];
+
+      let i = 0;
+      const cur = document.createElement('span');
+      cur.className = 'cursor';
+      replyEl.appendChild(cur);
+      thinkBlock.appendChild(replyEl);
+
+      // sources line
+      if (sources.length) {
+        const srcEl = document.createElement('div');
+        srcEl.style.cssText = 'font-size:8px;color:#1f4a2e;letter-spacing:0.08em;padding-left:16px;margin-top:4px;';
+        srcEl.textContent = '↳ ' + sources.join(' · ');
+        thinkBlock.appendChild(srcEl);
+      }
+
+      messages.scrollTop = messages.scrollHeight;
+
+      const typeInterval = setInterval(() => {
+        if (i < reply.length) {
+          replyEl.insertBefore(document.createTextNode(reply[i]), cur);
+          i++;
+          messages.scrollTop = messages.scrollHeight;
+        } else {
+          clearInterval(typeInterval);
+          replyEl.removeChild(cur);
+        }
+      }, 18);
+
+      const aiRecord = { id: 'ai_' + Date.now(), role: 'ai', text: reply, ts: Date.now(), sources };
+      allMessages.push(aiRecord);
+      updateCount();
+
+    } catch (err) {
+      thinkBlock.removeChild(thinkEl);
+      const errEl = document.createElement('div');
+      errEl.className = 'msg-text ai';
+      errEl.textContent = '[error reaching ai]';
+      thinkBlock.appendChild(errEl);
+    }
+  }
+
+  function addAIMessage(text, data) {
+    emptyState.style.display = 'none';
+    const block = document.createElement('div');
+    block.className = 'msg-block';
+    const meta = document.createElement('div');
+    meta.className = 'msg-meta';
+    meta.innerHTML = `<span class="ai-label">gpt-4o-mini</span><span class="sep">/</span><span class="time" data-ts="${data.ts}">${formatTime(Math.floor((Date.now()-data.ts)/1000))}</span>`;
+    const textEl = document.createElement('div');
+    textEl.className = 'msg-text ai';
+    textEl.textContent = text;
+    block.appendChild(meta);
+    block.appendChild(textEl);
+    messages.appendChild(block);
+    messages.scrollTop = messages.scrollHeight;
+  }
+
+  function formatTime(secs) {
+    if (secs < 60) return `${secs}s ago`;
+    if (secs < 3600) return `${Math.floor(secs/60)}m ago`;
+    return `${Math.floor(secs/3600)}h ago`;
+  }
+
+  function updateCount() {
+    msgCount.textContent = allMessages.length;
+  }
+
+  function escHtml(str) {
+    return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+</script>
+</body>
+</html>

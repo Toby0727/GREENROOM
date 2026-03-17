@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Type Here</title>
+<script src="/pusher.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 100%; min-height: 100%; background: #060606; font-family: 'IBM Plex Mono', monospace; color: #c0c0c0; }
+  .screen { width: 100%; min-height: 100dvh; display: flex; flex-direction: column; }
+
+  /* TERM BAR */
+  .term-bar {
+    flex-shrink: 0;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 12px 20px;
+    border-bottom: 1px solid #141414;
+    background: #0a0a0a;
+  }
+  .term-left { display: flex; flex-direction: column; gap: 3px; }
+  .term-title { font-size: 13px; letter-spacing: 0.06em; color: #ffffff; font-weight: 500; }
+  .term-sub { font-size: 8px; letter-spacing: 0.2em; color: #282828; text-transform: uppercase; }
+  .conn-pill { display: flex; align-items: center; gap: 6px; padding: 5px 10px; border: 1px solid #181818; }
+  .pill-dot { width: 5px; height: 5px; background: #222; border-radius: 50%; transition: background 0.3s; }
+  .pill-dot.on { background: #888; animation: throb 2s ease-in-out infinite; }
+  @keyframes throb { 0%,100% { opacity: 1; } 50% { opacity: 0.2; } }
+  .pill-label { font-size: 8px; letter-spacing: 0.15em; text-transform: uppercase; color: #282828; transition: color 0.3s; }
+  .conn-pill.on .pill-label { color: #444; }
+
+  /* PREVIEW */
+  .preview {
+    flex: 1; min-height: 100px; overflow-y: auto; padding: 16px 20px;
+    scrollbar-width: thin; scrollbar-color: #1a1a1a transparent;
+  }
+  .preview::-webkit-scrollbar { width: 2px; }
+  .preview::-webkit-scrollbar-thumb { background: #1e1e1e; }
+  .preview-label { font-size: 8px; letter-spacing: 0.2em; color: #ffffff; text-transform: uppercase; margin-bottom: 12px; }
+
+  .preview-msg { margin-bottom: 14px; }
+  .preview-meta { font-size: 9px; color: #282828; margin-bottom: 3px; letter-spacing: 0.06em; }
+  .preview-text { font-size: 14px; line-height: 1.6; color: #43d27c; word-break: break-word; padding-left: 12px; border-left: 1px solid #1f7f4a; }
+
+  .empty-hint { font-size: 10px; color: #1c1c1c; letter-spacing: 0.1em; }
+
+  /* INPUT AREA */
+  .input-area {
+    flex-shrink: 0;
+    background: #0a0a0a;
+    border-top: 1px solid #141414;
+    padding: 14px 20px env(safe-area-inset-bottom, 20px);
+    display: flex; flex-direction: column; gap: 10px;
+    position: sticky; bottom: 0;
+  }
+
+  /* USER CONFIG ROW */
+  .config-row { display: flex; gap: 8px; align-items: center; }
+  .config-input {
+    flex: 1; background: transparent; border: none; border-bottom: 1px solid #181818;
+    color: #888; font-family: 'IBM Plex Mono', monospace; font-size: 11px;
+    padding: 5px 0; outline: none; letter-spacing: 0.04em;
+  }
+  .config-input::placeholder { color: #222; }
+  .config-input:focus { border-color: #2a2a2a; }
+
+  .font-select {
+    background: #0d0d0d; border: 1px solid #181818; color: #444;
+    font-family: 'IBM Plex Mono', monospace; font-size: 9px;
+    padding: 5px 8px; outline: none; letter-spacing: 0.06em;
+    cursor: pointer; appearance: none; -webkit-appearance: none;
+    min-width: 100px;
+  }
+  .font-select:focus { border-color: #2a2a2a; }
+
+  /* TEXTAREA */
+  #msg-input {
+    width: 100%; background: transparent; border: none;
+    border-bottom: 1px solid #2ea562; color: #43d27c;
+    font-family: 'IBM Plex Mono', monospace; font-size: 15px;
+    line-height: 1.6; padding: 10px 0; outline: none; resize: none;
+    min-height: 52px; max-height: 140px; caret-color: #43d27c;
+    transition: border-color 0.2s;
+  }
+  #msg-input::placeholder { color: #2f8f57; }
+  #msg-input:focus { border-color: #43d27c; }
+
+  /* BUTTONS */
+  .action-row { display: flex; gap: 8px; align-items: center; justify-content: space-between; }
+
+  .send-btn {
+    flex: 1; background: #d8d8d8; border: none; color: #060606;
+    font-family: 'IBM Plex Mono', monospace; font-size: 9px;
+    letter-spacing: 0.2em; text-transform: uppercase; padding: 12px 0; cursor: pointer;
+    transition: background 0.15s;
+  }
+  .send-btn:active { background: #aaa; }
+  .send-btn:disabled { background: #141414; color: #222; cursor: default; }
+
+  .clear-btn {
+    background: transparent; border: 1px solid #181818; color: #222;
+    font-family: 'IBM Plex Mono', monospace; font-size: 9px;
+    letter-spacing: 0.14em; text-transform: uppercase;
+    padding: 12px 14px; cursor: pointer; white-space: nowrap;
+  }
+  .clear-btn:active { color: #555; border-color: #333; }
+
+  /* font preview strip */
+  .font-preview { font-size: 11px; color: #242424; padding: 4px 0; letter-spacing: 0.04em; min-height: 20px; }
+</style>
+</head>
+<body>
+<div class="screen">
+  <div class="term-bar">
+    <div class="term-left">
+      <div class="term-title">type here</div>
+      <div class="term-sub">live terminal</div>
+    </div>
+    <div class="conn-pill" id="conn-pill">
+      <div class="pill-dot" id="pill-dot"></div>
+      <span class="pill-label" id="pill-label">connecting</span>
+    </div>
+  </div>
+
+  <div class="preview" id="preview">
+    <div class="preview-label">— on screen now</div>
+    <div id="preview-msgs"><span class="empty-hint">no messages yet</span></div>
+  </div>
+
+  <div class="input-area">
+    <div class="config-row">
+      <input class="config-input" id="username-input" placeholder="your name" maxlength="20">
+      <select class="font-select" id="font-select">
+        <option value="mono">Mono</option>
+        <option value="helvetica">Helvetica</option>
+        <option value="serif">Times New Roman</option>
+        <option value="courier">Courier</option>
+        <option value="georgia">Georgia</option>
+        <option value="garamond">Garamond</option>
+      </select>
+    </div>
+    <div class="font-preview" id="font-preview">The quick brown fox</div>
+    <textarea id="msg-input" placeholder="type something..." rows="2"></textarea>
+    <div class="action-row">
+      <button class="send-btn" id="send-btn" disabled>send →</button>
+      <button class="clear-btn" id="clear-btn">clear all</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  const FONTS = {
+    'mono':      { label: 'IBM Plex Mono', css: "'IBM Plex Mono', monospace" },
+    'helvetica': { label: 'Helvetica',     css: "Helvetica, Arial, sans-serif" },
+    'serif':     { label: 'Times New Roman', css: "'Times New Roman', Times, serif" },
+    'courier':   { label: 'Courier New',   css: "'Courier New', Courier, monospace" },
+    'georgia':   { label: 'Georgia',       css: "Georgia, serif" },
+    'garamond':  { label: 'Garamond',      css: "Garamond, 'Times New Roman', serif" }
+  };
+
+  const pusher  = new Pusher('8e1cefae4252719fab23', { cluster: 'us2', forceTLS: true });
+  const channel = pusher.subscribe('livedoc');
+
+  const connPill    = document.getElementById('conn-pill');
+  const pillDot     = document.getElementById('pill-dot');
+  const pillLabel   = document.getElementById('pill-label');
+  const msgInput    = document.getElementById('msg-input');
+  const sendBtn     = document.getElementById('send-btn');
+  const clearBtn    = document.getElementById('clear-btn');
+  const previewMsgs = document.getElementById('preview-msgs');
+  const fontSelect  = document.getElementById('font-select');
+  const fontPreview = document.getElementById('font-preview');
+  const usernameInput = document.getElementById('username-input');
+
+  let previewList = [];
+  let userCounter = Math.floor(Math.random() * 90) + 10;
+  let deviceName  = detectDevice();
+
+  // persist username
+  usernameInput.value = localStorage.getItem('th_username') || '';
+  usernameInput.addEventListener('input', () => localStorage.setItem('th_username', usernameInput.value));
+
+  // font preview
+  fontSelect.addEventListener('change', () => {
+    fontPreview.style.fontFamily = FONTS[fontSelect.value].css;
+    fontPreview.textContent = `${FONTS[fontSelect.value].label} — Aa Bb Cc 123`;
+  });
+
+  pusher.connection.bind('connected', () => {
+    connPill.classList.add('on'); pillDot.classList.add('on');
+    pillLabel.textContent = 'connected'; sendBtn.disabled = false;
+    publish('requestSync', {});
+  });
+  pusher.connection.bind('disconnected', () => {
+    connPill.classList.remove('on'); pillDot.classList.remove('on');
+    pillLabel.textContent = 'disconnected'; sendBtn.disabled = true;
+  });
+
+  channel.bind('message', data => addPreview(data));
+  channel.bind('clear', () => { previewList = []; renderPreview(); });
+  channel.bind('syncAll', data => {
+    if (!data.messages || previewList.length > 0) return;
+    previewList = data.messages;
+    renderPreview();
+  });
+  channel.bind('requestSync', () => {}); // handled by tv (8).html
+
+  function addPreview(data) {
+    previewList.push(data);
+    renderPreview();
+  }
+
+  function renderPreview() {
+    if (previewList.length === 0) {
+      previewMsgs.innerHTML = '<span class="empty-hint">no messages yet</span>';
+      return;
+    }
+    previewMsgs.innerHTML = '';
+    previewList.forEach(m => {
+      const div = document.createElement('div');
+      div.className = 'preview-msg';
+      const secs = Math.floor((Date.now() - m.ts) / 1000);
+      div.innerHTML = `<div class="preview-meta">${m.user} / ${m.device} / ${formatTime(secs)}</div>`;
+      const t = document.createElement('div');
+      t.className = 'preview-text';
+      t.style.fontFamily = FONTS[m.font]?.css || FONTS.mono.css;
+      t.textContent = m.text;
+      div.appendChild(t);
+      previewMsgs.appendChild(div);
+    });
+    document.getElementById('preview').scrollTop = document.getElementById('preview').scrollHeight;
+  }
+
+  function formatTime(secs) {
+    if (secs < 60) return `${secs}s ago`;
+    if (secs < 3600) return `${Math.floor(secs/60)}m ago`;
+    return `${Math.floor(secs/3600)}h ago`;
+  }
+
+  sendBtn.addEventListener('click', async () => {
+    const text = msgInput.value.trim();
+    if (!text) return;
+    const name = usernameInput.value.trim() || `user ${userCounter}`;
+    const msg = {
+      id: Date.now() + Math.random().toString(36).slice(2),
+      text,
+      user: name,
+      device: deviceName,
+      font: fontSelect.value,
+      ts: Date.now()
+    };
+    addPreview(msg);
+    msgInput.value = ''; autoResize();
+    await publish('message', msg);
+  });
+
+  clearBtn.addEventListener('click', async () => {
+    previewList = []; renderPreview();
+    await publish('clear', {});
+  });
+
+  msgInput.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendBtn.click(); }
+  });
+
+  async function publish(event, data) {
+    await fetch('/api/pusher', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ event, data })
+    });
+  }
+
+  function autoResize() {
+    msgInput.style.height = 'auto';
+    msgInput.style.height = Math.min(msgInput.scrollHeight, 140) + 'px';
+  }
+  msgInput.addEventListener('input', autoResize);
+
+  function detectDevice() {
+    const ua = navigator.userAgent;
+    if (/iPhone/.test(ua)) {
+      const match = ua.match(/iPhone OS (\d+)/);
+      return match ? `iPhone iOS ${match[1]}` : 'iPhone';
+    }
+    if (/iPad/.test(ua)) return 'iPad';
+    if (/Android/.test(ua)) {
+      const match = ua.match(/Android [\d.]+; ([^;)]+)/);
+      return match ? match[1].trim().split(' ').slice(0,2).join(' ') : 'Android';
+    }
+    if (/Mac/.test(ua)) return 'Mac';
+    if (/Windows/.test(ua)) return 'Windows';
+    return 'Browser';
+  }
+</script>
+</body>
+</html>
